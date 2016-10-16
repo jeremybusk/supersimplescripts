@@ -1,0 +1,16 @@
+#!/bin/bash
+#set variables
+service_name="dns"
+zone_name="access"
+subnets="""10.0.0.0/8
+192.168.0.0/16
+2600:0000::/32"""
+echo Adding zone $zone_name
+firewall-cmd --new-zone=$zone_name --permanent
+for i in $subnets; do
+    echo Adding $i
+    firewall-cmd --zone=$zone_name --permanent --add-source=$i
+done
+echo Adding service $service_name
+firewall-cmd --permanent --zone=$zone_name --add-service=$service_name
+systemctl restart firewalld
