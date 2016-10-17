@@ -1,0 +1,32 @@
+#!/bin/bash
+#This is a really, really simple spam blocker based on too many login attempts.
+#Used for quick fix but not long term as it is really basic.
+#Uses http://www.logix.cz/michal/devel/smtp-cli/
+#Adjust login_limit for sensitivity. This is nice an easy when you're in a pinch.
+#Add script into cron for checking every 5 minutes or so
+#login_limit=15
+login_limit=50
+notify_email="your-email@your-domain.com"
+zimbra_host="mail.yourhost.com"
+get_top_email_by_login_attempts(){
+ssh -p 22 $zimra_host << EOF cat /var/log/maillog | grep -A 1000000 "`date --date='1 hour ago' +"%b %-d %H:%M"`" | grep sasl_method | cut -d "," -f 3 |cut -d ":" -f 4 |sort -n |uniq -c |     grep -v postfix | sort -rn | grep -v \"sasl_username=smtprelayuser@veracitynetworks.net\|warning\" | head -1
+EOF
+}
+cmd_output=$(get_top_email_by_login_attempts)
+login_count=$(echo ${cmd_output} | awk '{print $1}')
+login_email=$(echo ${cmd_output} | awk '{print $2}' | awk -F"=" '{print $2}')
+echo $login_count
+echo $login_email
+if [ $login_count -gt $login_limit ]
+then
+    echo "SPAMMER - too many logins for $login_email - $login_count"
+    notify_subject="SPAM ALERT $login_email count:$login_count"
+    notify_message="SPAM ALERT - too many logins for $login_email - $login_count"
+    /usr/bin/smtp-cli --host=smtp.yourdomain.com --enable-auth --user yourrelayuser@yourdomain.com --from no-reply@yourdomain.com --to $notify_email --subject "$notify_subject" --body "$notify_message" --password "yourpassword"
+    echo "setting $login_email to locked in 5 seconds"
+    sleep 5
+    out=`curl -s "https://api.yourdomain.com/api/zimbra/v1/admin/zimbra?email=$login_email&action=locked&key=yourapikey"`
+    echo $out
+else
+    echo "no spammers"
+fi
